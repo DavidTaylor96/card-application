@@ -5,7 +5,14 @@
     "dev:docker": "docker-compose -f docker-compose.dev.yml up",
     "dev:docker:build": "docker-compose -f docker-compose.dev.yml up --build",
     "build": "tsc",
-    "swaggergen": "npx ts-node scripts/generate-resource.ts card-application-resource.json --server --swagger"
+    "swaggergen": "npx ts-node scripts/generate-resource.ts card-application-resource.json --server --swagger",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest src/tests/unit",
+    "test:integration": "jest src/tests/integration",
+    "test:e2e": "jest src/tests/e2e",
+    "test:ci": "jest --ci --collectCoverage"
   },
   "dependencies": {
     "body-parser": "^1.20.3",
@@ -20,15 +27,20 @@
     "require-all": "^3.0.0",
     "routing-controllers": "^0.10.0",
     "routing-controllers-openapi": "^5.0.0",
+    "supertest": "^7.0.0",
     "swagger-ui-express": "^5.0.1",
     "ts-node": "^10.9.2"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/glob": "^8.0.0",
+    "@types/jest": "^29.5.14",
     "@types/node": "^22.13.10",
     "@types/require-all": "^3.0.3",
+    "@types/supertest": "^6.0.2",
     "@types/swagger-ui-express": "^4.1.8",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.6",
     "typescript": "^5.8.2"
   }
 }

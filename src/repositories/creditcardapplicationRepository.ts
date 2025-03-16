@@ -1,5 +1,4 @@
-// src/repositories/creditcardapplicationRepository.ts
-import { CreditCardApplication, CreditCardApplicationStatus } from '../models/interfaces/creditcardapplication.interface';
+import { CreditCardApplication } from '../models/interfaces/creditcardapplication.interface';
 
 // In-memory storage (will replace with database later)
 let creditCardApplications: CreditCardApplication[] = [];
@@ -55,6 +54,7 @@ export class CreditCardApplicationRepository {
       return undefined;
     }
     
+    // Update status and timestamp
     creditCardApplications[index] = {
       ...creditCardApplications[index],
       status,
