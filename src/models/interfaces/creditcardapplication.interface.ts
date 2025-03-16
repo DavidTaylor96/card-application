@@ -1,4 +1,6 @@
 // src/models/interfaces/creditcardapplication.interface.ts
+export type CreditCardApplicationStatus = 'PENDING' | 'REVIEWING' | 'APPROVED' | 'REJECTED';
+
 export interface CreditCardApplication {
   /**
    * Full name of the applicant

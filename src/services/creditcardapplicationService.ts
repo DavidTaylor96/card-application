@@ -1,5 +1,5 @@
 // src/services/creditCardApplicationService.ts
-import { CreditCardApplication } from '../models/interfaces/creditcardapplication.interface';
+import { CreditCardApplication, CreditCardApplicationStatus } from '../models/interfaces/creditcardapplication.interface';
 import { CreditCardApplicationRepository } from '../repositories/creditcardapplicationRepository';
 
 // Valid status values: 'PENDING' | 'REVIEWING' | 'APPROVED' | 'REJECTED'
@@ -34,7 +34,7 @@ export class CreditCardApplicationService {
   }
   
   // Update credit card application status
-  async updateStatus(id: string, status: string): Promise<CreditCardApplication | undefined> {
+  async updateStatus(id: string, status: 'PENDING' | 'REVIEWING' | 'APPROVED' | 'REJECTED'): Promise<CreditCardApplication | undefined> {
     return this.creditCardApplicationRepository.updateStatus(id, status);
   }
   

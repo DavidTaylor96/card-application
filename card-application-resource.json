@@ -2,7 +2,7 @@
     "name": "CreditCardApplication",
     "basePath": "/card-applications",
     "serviceName": "CreditCardApplicationService",
-    "serviceImportPath": "../services/creditCardApplicationService",
+    "serviceImportPath": "../services/creditcardapplicationService",
     "entityName": "CreditCardApplication",
     "generateRepository": true,
     "generateDtos": true,

@@ -11,28 +11,45 @@ export function generateServer(outputPath: string): void {
 import 'reflect-metadata';
 import express from 'express';
 import { createExpressServer } from 'routing-controllers';
-import { HealthController } from './controllers/healthController';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 
 // Load environment variables
 dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 
-// Automatically load all controllers
-const controllersPath = path.join(__dirname, './controllers/**/*Controller.{ts,js}');
-const controllers = Object.values(require('require-all')({
-  dirname: path.join(__dirname, './controllers'),
-  filter: /(.+Controller)\.([jt])s$/,
-  recursive: true
-})).flat();
+// Manually load controllers
+const controllersPath = path.join(__dirname, 'controllers');
+const controllerClasses: Function[] = [];
 
-console.log(\`Loaded \${controllers.length} controllers\`);
+// Check if controllers directory exists
+if (fs.existsSync(controllersPath)) {
+  // Read controller files
+  const files = fs.readdirSync(controllersPath)
+    .filter(file => file.endsWith('Controller.ts') || file.endsWith('Controller.js'));
+  
+  // Load each controller
+  for (const file of files) {
+    const controller = require(path.join(controllersPath, file));
+    
+    // Find the controller class in the exports
+    const controllerClass = Object.values(controller).find(
+      exp => typeof exp === 'function' && exp.name.endsWith('Controller')
+    );
+    
+    if (controllerClass && typeof controllerClass === 'function') {
+      controllerClasses.push(controllerClass);
+    }
+  }
+}
+
+console.log(\`Loaded \${controllerClasses.length} controllers\`);
 
 // Create Express server with routing-controllers
 const app = createExpressServer({
-  controllers: controllers,
+  controllers: controllerClasses,
   routePrefix: '/api',
   validation: {
     whitelist: true,
@@ -41,6 +58,17 @@ const app = createExpressServer({
   },
   defaultErrorHandler: true
 });
+
+// Only setup Swagger if we have controllers
+if (controllerClasses.length > 0) {
+  try {
+    const { setupSwagger } = require('./swagger');
+    setupSwagger(app);
+    console.log('Swagger documentation enabled at http://localhost:' + PORT + '/api-docs');
+  } catch (error) {
+    console.error('Failed to setup Swagger:', error.message);
+  }
+}
 
 // Basic health check endpoint outside of API prefix
 app.get('/health', (req: express.Request, res: express.Response) => {
@@ -57,8 +85,8 @@ app.get('/health', (req: express.Request, res: express.Response) => {
 // Start server
 app.listen(PORT, () => {
   console.log(\`Server running on port \${PORT}\`);
-});
-`;
+  console.log(\`API Documentation available at http://localhost:\${PORT}/api-docs\`);
+});`;
 
   // Write the server.ts file
   fs.writeFileSync(outputPath, serverCode);

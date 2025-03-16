@@ -1,5 +1,5 @@
 // src/repositories/creditcardapplicationRepository.ts
-import { CreditCardApplication } from '../models/interfaces/creditcardapplication.interface';
+import { CreditCardApplication, CreditCardApplicationStatus } from '../models/interfaces/creditcardapplication.interface';
 
 // In-memory storage (will replace with database later)
 let creditCardApplications: CreditCardApplication[] = [];
@@ -48,7 +48,7 @@ export class CreditCardApplicationRepository {
   }
   
   // Update credit card application status
-  async updateStatus(id: string, status: string): Promise<CreditCardApplication | undefined> {
+  async updateStatus(id: string, status: 'PENDING' | 'REVIEWING' | 'APPROVED' | 'REJECTED'): Promise<CreditCardApplication | undefined> {
     const index = creditCardApplications.findIndex(item => item.id === id);
     
     if (index === -1) {

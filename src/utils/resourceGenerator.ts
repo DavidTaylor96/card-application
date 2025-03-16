@@ -26,8 +26,15 @@ export function generateInterfaceCode(config: ResourceConfig): string {
   // Convert entity name to proper camelCase for variables
   const entityNameCamelCase = entityName.charAt(0).toLowerCase() + entityName.slice(1);
   
+  // Check if we have a status field with a union type
+  const statusProperty = properties.find(p => p.name === 'status' && p.type.includes('|'));
+  
+  // Generate status type if needed
+  const statusTypeExport = statusProperty ? 
+    `export type ${entityName}Status = ${statusProperty.type};\n\n` : '';
+  
   let code = `// src/models/interfaces/${entityNameCamelCase.toLowerCase()}.interface.ts
-export interface ${entityName} {
+${statusTypeExport}export interface ${entityName} {
 `;
 
   // Add properties
@@ -68,8 +75,11 @@ export function generateServiceCode(config: ResourceConfig): string {
   // Convert to readable format with spaces for comments
   const readableEntityName = entityName.replace(/([A-Z])/g, ' $1').trim().toLowerCase();
   
+  // Define a type for the status if it exists
+  const statusType = hasStatusField && statusProperty.type.includes('|') ? statusProperty.type : 'string';
+  
   let code = `// src/services/${entityNameCamelCase}Service.ts
-import { ${entityName} } from '../models/interfaces/${entityNameCamelCase.toLowerCase()}.interface';
+import { ${entityName}${hasStatusField && statusProperty.type.includes('|') ? `, ${entityName}Status` : ''} } from '../models/interfaces/${entityNameCamelCase.toLowerCase()}.interface';
 ${config.generateRepository ? `import { ${entityName}Repository } from '../repositories/${entityNameCamelCase.toLowerCase()}Repository';` : ''}
 
 ${hasStatusField && statusProperty.type.includes('|') ? 
@@ -135,7 +145,7 @@ export class ${serviceName} {
   }
   ${hasStatusField ? `
   // Update ${readableEntityName} status
-  async updateStatus(id: string, status: string): Promise<${entityName} | undefined> {
+  async updateStatus(id: string, status: ${statusType}): Promise<${entityName} | undefined> {
     ${config.generateRepository ? 
       `return this.${entityNameCamelCase}Repository.updateStatus(id, status);` : 
       `const index = ${entityNameCamelCase}s.findIndex(item => item.id === id);
@@ -171,7 +181,6 @@ export class ${serviceName} {
 
   return code;
 }
-
 /**
  * Generates a repository class for the entity
  */
@@ -186,8 +195,15 @@ export function generateRepositoryCode(config: ResourceConfig): string {
   // Convert to readable format with spaces for comments
   const readableEntityName = entityName.replace(/([A-Z])/g, ' $1').trim().toLowerCase();
   
+  // Define a type for the status if it exists
+  const statusType = hasStatusField && statusProperty.type.includes('|') ? statusProperty.type : 'string';
+  
+  // Generate code for exporting status type if needed
+  const statusTypeExport = hasStatusField && statusProperty.type.includes('|') ? 
+    `export type ${entityName}Status = ${statusProperty.type};\n\n` : '';
+  
   let code = `// src/repositories/${entityNameCamelCase.toLowerCase()}Repository.ts
-import { ${entityName} } from '../models/interfaces/${entityNameCamelCase.toLowerCase()}.interface';
+import { ${entityName}${hasStatusField && statusProperty.type.includes('|') ? `, ${entityName}Status` : ''} } from '../models/interfaces/${entityNameCamelCase.toLowerCase()}.interface';
 
 // In-memory storage (will replace with database later)
 let ${entityNameCamelCase}s: ${entityName}[] = [];
@@ -236,7 +252,7 @@ export class ${entityName}Repository {
   }
   ${hasStatusField ? `
   // Update ${readableEntityName} status
-  async updateStatus(id: string, status: string): Promise<${entityName} | undefined> {
+  async updateStatus(id: string, status: ${statusType}): Promise<${entityName} | undefined> {
     const index = ${entityNameCamelCase}s.findIndex(item => item.id === id);
     
     if (index === -1) {
@@ -269,6 +285,7 @@ export class ${entityName}Repository {
   return code;
 }
 
+
 /**
  * Generates DTO classes for the entity
  */
@@ -279,78 +296,133 @@ export function generateDtoCode(config: ResourceConfig): string {
   const entityNameCamelCase = entityName.charAt(0).toLowerCase() + entityName.slice(1);
   
   let code = `// src/dtos/${entityNameCamelCase.toLowerCase()}Dto.ts
-import { IsString, IsEmail, IsOptional, IsNumber, IsBoolean, MinLength, IsIn } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsNumber, IsBoolean, MinLength, IsIn, IsArray } from 'class-validator';
+import { ApiProperty } from '../decorators/api-property.decorator';
 
-export class Create${entityName}Dto {
-`;
+export class Create${entityName}Dto {`;
 
   // Add properties with validation decorators
   properties.forEach(prop => {
     if (prop.description) {
-      code += `  /**
+      code += `
+  /**
    * ${prop.description}
-   */
-`;
+   */`;
     }
     
+    // Handle array types specially
+    const isArray = prop.type.endsWith('[]');
+    const baseType = isArray ? prop.type.slice(0, -2) : prop.type;
+    
+    // Add API Property decorator
+    code += `
+  @ApiProperty({
+    description: ${JSON.stringify(prop.description || prop.name)},
+    required: ${prop.required !== false},${prop.type.includes('|') ? `
+    enum: [${prop.type.split('|').map(t => t.trim().replace(/['"]/g, '')).map(o => `'${o}'`).join(', ')}],` : ''}
+    type: '${isArray ? 'array' : baseType === 'number' ? 'number' : baseType === 'boolean' ? 'boolean' : 'string'}'${isArray ? `,
+    items: {
+      type: '${baseType === 'number' ? 'number' : baseType === 'boolean' ? 'boolean' : 'string'}'
+    }` : ''}
+  })`;
+    
     // Add validation decorators based on type
-    if (prop.type === 'string') {
-      code += `  @IsString()\n`;
+    if (isArray) {
+      code += `
+  @IsArray()`;
+    } else if (baseType === 'string') {
+      code += `
+  @IsString()`;
       if (prop.required !== false) {
-        code += `  @MinLength(1)\n`;
+        code += `
+  @MinLength(1)`;
       }
-    } else if (prop.type === 'number') {
-      code += `  @IsNumber()\n`;
-    } else if (prop.type === 'boolean') {
-      code += `  @IsBoolean()\n`;
-    } else if (prop.type.includes('|')) {
+    } else if (baseType === 'number') {
+      code += `
+  @IsNumber()`;
+    } else if (baseType === 'boolean') {
+      code += `
+  @IsBoolean()`;
+    } else if (baseType.includes('|')) {
       // For union types like 'PENDING' | 'APPROVED'
-      const options = prop.type.split('|').map(t => t.trim().replace(/['"]/g, ''));
-      code += `  @IsString()\n`;
-      code += `  @IsIn([${options.map(o => `'${o}'`).join(', ')}])\n`;
+      const options = baseType.split('|').map(t => t.trim().replace(/['"]/g, ''));
+      code += `
+  @IsString()
+  @IsIn([${options.map(o => `'${o}'`).join(', ')}])`;
     }
     
     if (prop.required === false) {
-      code += `  @IsOptional()\n`;
+      code += `
+  @IsOptional()`;
     }
     
     const optional = prop.required === false ? '?' : '';
-    code += `  ${prop.name}${optional}: ${prop.type};\n\n`;
+    code += `
+  ${prop.name}${optional}: ${prop.type};
+`;
   });
 
-  code += `}
+  code += `
+}
 
-export class Update${entityName}Dto {
-`;
+export class Update${entityName}Dto {`;
 
   // Add properties for update DTO (all optional)
   properties.forEach(prop => {
     if (prop.description) {
-      code += `  /**
+      code += `
+  /**
    * ${prop.description}
-   */
+   */`;
+    }
+    
+    // Handle array types specially
+    const isArray = prop.type.endsWith('[]');
+    const baseType = isArray ? prop.type.slice(0, -2) : prop.type;
+    
+    // Add API Property decorator
+    code += `
+  @ApiProperty({
+    description: ${JSON.stringify(prop.description || prop.name)},
+    required: false,${prop.type.includes('|') ? `
+    enum: [${prop.type.split('|').map(t => t.trim().replace(/['"]/g, '')).map(o => `'${o}'`).join(', ')}],` : ''}
+    type: '${isArray ? 'array' : baseType === 'number' ? 'number' : baseType === 'boolean' ? 'boolean' : 'string'}'${isArray ? `,
+    items: {
+      type: '${baseType === 'number' ? 'number' : baseType === 'boolean' ? 'boolean' : 'string'}'
+    }` : ''}
+  })`;
+    
+    // All properties are optional in the UpdateDTO
+    code += `
+  @IsOptional()`;
+    
+    // Add type validation
+    if (isArray) {
+      code += `
+  @IsArray()`;
+    } else if (baseType === 'string') {
+      code += `
+  @IsString()`;
+    } else if (baseType === 'number') {
+      code += `
+  @IsNumber()`;
+    } else if (baseType === 'boolean') {
+      code += `
+  @IsBoolean()`;
+    } else if (baseType.includes('|')) {
+      const options = baseType.split('|').map(t => t.trim().replace(/['"]/g, ''));
+      code += `
+  @IsString()
+  @IsIn([${options.map(o => `'${o}'`).join(', ')}])`;
+    }
+    
+    code += `
+  ${prop.name}?: ${prop.type};
 `;
-    }
-    
-    // Add validation decorators based on type
-    code += `  @IsOptional()\n`;
-    if (prop.type === 'string') {
-      code += `  @IsString()\n`;
-    } else if (prop.type === 'number') {
-      code += `  @IsNumber()\n`;
-    } else if (prop.type === 'boolean') {
-      code += `  @IsBoolean()\n`;
-    } else if (prop.type.includes('|')) {
-      // For union types like 'PENDING' | 'APPROVED'
-      const options = prop.type.split('|').map(t => t.trim().replace(/['"]/g, ''));
-      code += `  @IsString()\n`;
-      code += `  @IsIn([${options.map(o => `'${o}'`).join(', ')}])\n`;
-    }
-    
-    code += `  ${prop.name}?: ${prop.type};\n\n`;
   });
 
-  code += `}
+  code += `
+}
 `;
 
   return code;
@@ -389,7 +461,7 @@ export function generateResource(config: ResourceConfig): void {
     },
     {
       path: path.join(baseDir, `src/controllers/${config.entityName.toLowerCase()}Controller.ts`),
-      content: generateControllerCode(config)
+      content: generateControllerCode({...config, properties: config.properties})
     }
   ];
   

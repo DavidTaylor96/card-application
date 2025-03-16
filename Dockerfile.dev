@@ -1,0 +1,23 @@
+FROM node:18-alpine
+
+WORKDIR /usr/src/app
+
+# Install global dependencies
+RUN npm install -g nodemon
+
+# Copy package files first (for better caching)
+COPY package*.json ./
+
+# Install dependencies with the legacy-peer-deps flag
+RUN npm install --legacy-peer-deps
+
+# Copy tsconfig
+COPY tsconfig.json ./
+
+# We'll mount the src directory as a volume, not copying it here
+
+EXPOSE 3000
+EXPOSE 9229
+
+# Default command (will be overridden by docker-compose)
+CMD ["nodemon", "--watch", "src", "--ext", "ts", "--exec", "node -r ts-node/register src/server.ts"]
