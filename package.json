@@ -1,0 +1,22 @@
+{
+  "dependencies": {
+    "body-parser": "^1.20.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "nodemon": "^3.1.9",
+    "reflect-metadata": "^0.1.13",
+    "routing-controllers": "^0.10.0",
+    "ts-node": "^10.9.2",
+    "require-all": "^3.0.0",
+    "glob": "^8.0.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "@types/glob": "^8.0.0",
+    "@types/require-all": "^3.0.3"
+  }
+}
