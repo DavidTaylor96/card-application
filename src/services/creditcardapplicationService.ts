@@ -35,12 +35,6 @@ export class CreditCardApplicationService {
   
   // Update credit card application status
   async updateStatus(id: string, status: 'PENDING' | 'REVIEWING' | 'APPROVED' | 'REJECTED'): Promise<CreditCardApplication | undefined> {
-    // Validate status
-    const validStatuses = ['PENDING', 'REVIEWING', 'APPROVED', 'REJECTED'];
-    if (!validStatuses.includes(status)) {
-      throw new Error('Invalid status value');
-    }
-    
     return this.creditCardApplicationRepository.updateStatus(id, status);
   }
   

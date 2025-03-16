@@ -12,7 +12,9 @@
     "test:unit": "jest src/tests/unit",
     "test:integration": "jest src/tests/integration",
     "test:e2e": "jest src/tests/e2e",
-    "test:ci": "jest --ci --collectCoverage"
+    "test:ci": "jest --ci --collectCoverage",
+    "generate:v1": "npx ts-node scripts/generate-resource.ts --version=1",
+    "generate:v2": "npx ts-node scripts/generate-resource.ts --version=2"
   },
   "dependencies": {
     "body-parser": "^1.20.3",

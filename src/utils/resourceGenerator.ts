@@ -15,6 +15,7 @@ export interface ResourceConfig extends ControllerConfig {
   properties: EntityProperty[];
   generateRepository: boolean;
   generateDtos: boolean;
+  version?: string; // New field to specify API version
 }
 
 /**
@@ -429,10 +430,23 @@ export class Update${entityName}Dto {`;
 }
 
 /**
+ * Construct the version-specific path for a resource
+ */
+function getVersionedPath(basePath: string, version?: string): string {
+  if (!version) return basePath;
+  return `/v${version}${basePath}`;
+}
+
+/**
  * Generates all files for a resource
  */
 export function generateResource(config: ResourceConfig): void {
   const baseDir = process.cwd();
+  const { version } = config;
+  
+  // Setup versioned paths for routes
+  const versionedBasePath = getVersionedPath(config.basePath, version);
+  const versionedConfig = { ...config, basePath: versionedBasePath };
   
   // Create directories if they don't exist
   const dirs = [
@@ -449,32 +463,41 @@ export function generateResource(config: ResourceConfig): void {
     }
   });
   
+  // Determine file naming based on version
+  const getVersionedFileName = (baseName: string) => {
+    if (!version) return baseName;
+    return `${baseName}.v${version}`;
+  };
+  
+  // Convert entity name to lowercase for file naming
+  const entityLowerCase = config.entityName.toLowerCase();
+  
   // Generate files
   const files = [
     {
-      path: path.join(baseDir, `src/models/interfaces/${config.entityName.toLowerCase()}.interface.ts`),
+      path: path.join(baseDir, `src/models/interfaces/${entityLowerCase}.interface.ts`),
       content: generateInterfaceCode(config)
     },
     {
-      path: path.join(baseDir, `src/services/${config.entityName.toLowerCase()}Service.ts`),
+      path: path.join(baseDir, `src/services/${getVersionedFileName(entityLowerCase)}Service.ts`),
       content: generateServiceCode(config)
     },
     {
-      path: path.join(baseDir, `src/controllers/${config.entityName.toLowerCase()}Controller.ts`),
-      content: generateControllerCode({...config, properties: config.properties})
+      path: path.join(baseDir, `src/controllers/${getVersionedFileName(entityLowerCase)}Controller.ts`),
+      content: generateControllerCode({...versionedConfig, properties: config.properties})
     }
   ];
   
   if (config.generateRepository) {
     files.push({
-      path: path.join(baseDir, `src/repositories/${config.entityName.toLowerCase()}Repository.ts`),
+      path: path.join(baseDir, `src/repositories/${getVersionedFileName(entityLowerCase)}Repository.ts`),
       content: generateRepositoryCode(config)
     });
   }
   
   if (config.generateDtos) {
     files.push({
-      path: path.join(baseDir, `src/dtos/${config.entityName.toLowerCase()}Dto.ts`),
+      path: path.join(baseDir, `src/dtos/${getVersionedFileName(entityLowerCase)}Dto.ts`),
       content: generateDtoCode(config)
     });
   }
@@ -484,4 +507,9 @@ export function generateResource(config: ResourceConfig): void {
     fs.writeFileSync(file.path, file.content);
     console.log(`Generated: ${file.path}`);
   });
+  
+  // Log version information
+  if (version) {
+    console.log(`API Version: v${version} - Endpoints will be available at: ${versionedBasePath}`);
+  }
 }

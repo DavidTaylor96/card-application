@@ -21,7 +21,7 @@ import { CreditCardApplication, CreditCardApplicationStatus } from '../models/in
 import { CreateCreditCardApplicationDto, UpdateCreditCardApplicationDto } from '../dtos/creditcardapplicationDto';
 
 /**
- * CreditCardApplication - API Controller
+ * CreditCardApplication - API Controller 
  * Generated automatically
  */
 @JsonController('/card-applications')

@@ -11,9 +11,10 @@ dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 
-// Manually load controllers
+// Manually load controllers with versioning support
 const controllersPath = path.join(__dirname, 'controllers');
 const controllerClasses: Function[] = [];
+const apiVersions: Set<string> = new Set();
 
 // Check if controllers directory exists
 if (fs.existsSync(controllersPath)) {
@@ -21,7 +22,7 @@ if (fs.existsSync(controllersPath)) {
   const files = fs.readdirSync(controllersPath)
     .filter(file => file.endsWith('Controller.ts') || file.endsWith('Controller.js'));
   
-  // Load each controller
+  // Load each controller and detect versions
   for (const file of files) {
     const controller = require(path.join(controllersPath, file));
     
@@ -32,11 +33,20 @@ if (fs.existsSync(controllersPath)) {
     
     if (controllerClass && typeof controllerClass === 'function') {
       controllerClasses.push(controllerClass);
+      
+      // Check for version in file name (e.g., userControllerV1.ts)
+      const versionMatch = file.match(/Controller[Vv](\d+)/i);
+      if (versionMatch && versionMatch[1]) {
+        apiVersions.add(versionMatch[1]);
+      }
     }
   }
 }
 
 console.log(`Loaded ${controllerClasses.length} controllers`);
+if (apiVersions.size > 0) {
+  console.log(`Detected API versions: ${Array.from(apiVersions).join(', ')}`);
+}
 
 // Create Express server with routing-controllers
 const app = createExpressServer({
@@ -50,27 +60,50 @@ const app = createExpressServer({
   defaultErrorHandler: true
 });
 
-// Only setup Swagger if we have controllers
+// Setup Swagger documentation for each version
 if (controllerClasses.length > 0) {
   try {
-    const { setupSwagger } = require('./swagger');
-    setupSwagger(app);
-    console.log('Swagger documentation enabled at http://localhost:' + PORT + '/api-docs');
-  } catch (error: any) {
-    console.error('Failed to setup Swagger:', error.message);
+    // If we have versions, set up separate swagger docs for each version
+    if (apiVersions.size > 0) {
+      Array.from(apiVersions).forEach(version => {
+        try {
+          const { setupSwagger } = require('./swagger');
+          // Pass the version to swagger setup
+          setupSwagger(app, version);
+          console.log(`Swagger documentation for v${version} enabled at http://localhost:${PORT}/api-docs/v${version}`);
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error(`Failed to setup Swagger for version ${version}:`, errorMessage);
+        }
+      });
+      
+      // Also set up the default latest version for /api-docs
+      const latestVersion = Array.from(apiVersions).sort().pop();
+      if (latestVersion) {
+        const { setupSwagger } = require('./swagger');
+        setupSwagger(app, latestVersion, true); // true indicates this is the default
+        console.log(`Latest API (v${latestVersion}) documentation available at http://localhost:${PORT}/api-docs`);
+      }
+    } else {
+      // No versions detected, just set up the default swagger
+      const { setupSwagger } = require('./swagger');
+      setupSwagger(app);
+      console.log(`Swagger documentation enabled at http://localhost:${PORT}/api-docs`);
+    }
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Failed to setup Swagger:', errorMessage);
   }
 }
 
-console.log('Controller classes:', controllerClasses.map(c => c.name));
-
-
-// Add this after setting up all routes in server.ts
-app._router.stack.forEach((middleware: any) => {
-  if (middleware.route) {
-    console.log(`Route: ${Object.keys(middleware.route.methods)} ${middleware.route.path}`);
-  }
+// Version info endpoint
+app.get('/api/versions', (req: express.Request, res: express.Response) => {
+  const versions = Array.from(apiVersions).sort();
+  res.json({
+    versions,
+    latest: versions.length > 0 ? versions[versions.length - 1] : '1'
+  });
 });
-
 
 // Basic health check endpoint outside of API prefix
 app.get('/health', (req: express.Request, res: express.Response) => {
@@ -80,7 +113,8 @@ app.get('/health', (req: express.Request, res: express.Response) => {
   res.status(200).json({ 
     status: 'OK', 
     service: 'card-application-api',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    apiVersions: Array.from(apiVersions).sort()
   });
 });
 

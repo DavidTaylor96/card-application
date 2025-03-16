@@ -18,13 +18,26 @@ export interface ControllerConfig {
   endpoints: EndpointConfig[];
   serviceName: string;
   serviceImportPath: string;
+  version?: string; // New field for API version
+}
+
+/**
+ * Extracts the name of the service class without the version suffix
+ */
+function getBaseServiceName(serviceName: string, version?: string): string {
+  if (!version) return serviceName;
+  const versionSuffix = `V${version}`;
+  if (serviceName.endsWith(versionSuffix)) {
+    return serviceName.substring(0, serviceName.length - versionSuffix.length);
+  }
+  return serviceName;
 }
 
 /**
  * Generates controller class code as a string based on configuration
  */
 export function generateControllerCode(config: ControllerConfig & { properties?: EntityProperty[] }): string {
-  const { name, basePath, endpoints, serviceName, serviceImportPath, properties } = config;
+  const { name, basePath, endpoints, serviceName, serviceImportPath, properties, version } = config;
   
   // Convert entity name to proper camelCase for variables
   const entityNameCamelCase = name.charAt(0).toLowerCase() + name.slice(1);
@@ -32,6 +45,16 @@ export function generateControllerCode(config: ControllerConfig & { properties?:
   // Check if we have a status property with a union type
   const statusProperty = properties?.find(p => p.name === 'status' && p.type.includes('|'));
   const hasStatusType = !!statusProperty;
+  
+  // Build controller class name with version suffix if applicable
+  const controllerClass = version ? `${name}V${version}Controller` : `${name}Controller`;
+  
+  // Adjust interfaces and DTOs import paths based on versioning
+  const interfaceImport = `import { ${name}${hasStatusType ? `, ${name}Status` : ''} } from '../models/interfaces/${entityNameCamelCase.toLowerCase()}.interface';`;
+  
+  // For DTOs, we might have versioned files
+  const dtoFileName = version ? `${entityNameCamelCase.toLowerCase()}.v${version}` : entityNameCamelCase.toLowerCase();
+  const dtoImport = `import { Create${name}Dto, Update${name}Dto } from '../dtos/${dtoFileName}Dto';`;
   
   // Start building the controller class
   let code = `
@@ -53,15 +76,15 @@ import { OpenAPI } from 'routing-controllers-openapi';
 import { ${serviceName} } from '${serviceImportPath}';
 
 // Import entity and DTOs
-import { ${name}${hasStatusType ? `, ${name}Status` : ''} } from '../models/interfaces/${entityNameCamelCase.toLowerCase()}.interface';
-import { Create${name}Dto, Update${name}Dto } from '../dtos/${entityNameCamelCase.toLowerCase()}Dto';
+${interfaceImport}
+${dtoImport}
 
 /**
- * ${name} - API Controller
+ * ${name} - API Controller ${version ? `(v${version})` : ''}
  * Generated automatically
  */
 @JsonController('${basePath}')
-export class ${name}Controller {
+export class ${controllerClass} {
   private ${entityNameCamelCase}Service: ${serviceName};
   
   constructor() {
@@ -77,7 +100,7 @@ export class ${name}Controller {
     if (description) {
       code += `
   /**
-   * ${description}
+   * ${description}${version ? ` (API v${version})` : ''}
    */`;
     }
     
@@ -85,8 +108,8 @@ export class ${name}Controller {
     const isStatusUpdate = path.includes('status');
     code += `
   @OpenAPI({
-    summary: '${description || handler}',
-    description: '${description || ''}',
+    summary: '${description || handler}${version ? ` (v${version})` : ''}',
+    description: '${description || ''}${version ? ` - API Version ${version}` : ''}',
     responses: {
       ${statusCode || (method === 'post' ? '201' : '200')}: { description: 'Success' },
       400: { description: 'Bad Request' },

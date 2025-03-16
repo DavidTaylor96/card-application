@@ -3,8 +3,10 @@ import { ResourceConfig } from './resourceGenerator';
 /**
  * Generates Swagger setup code
  */
-
 export function generateSwaggerSetup(config: ResourceConfig): string {
+  const version = config.version ? `v${config.version}` : '';
+  const versionedBasePath = version ? `/${version}${config.basePath}` : config.basePath;
+
   return `// src/swagger.ts
 import * as swaggerUi from 'swagger-ui-express';
 import express from 'express';
@@ -14,8 +16,8 @@ export function setupSwagger(app: express.Express): void {
   const spec = {
     openapi: '3.0.0',
     info: {
-      title: '${config.name} API',
-      version: '1.0.0',
+      title: '${config.name} API${config.version ? ` (v${config.version})` : ''}',
+      version: '${config.version || '1.0.0'}',
       description: 'API for managing ${config.name.toLowerCase()}'
     },
     servers: [
@@ -26,15 +28,15 @@ export function setupSwagger(app: express.Express): void {
     ],
     tags: [
       {
-        name: '${config.name}',
-        description: '${config.name} operations'
+        name: '${config.name}${config.version ? ` v${config.version}` : ''}',
+        description: '${config.name} operations${config.version ? ` - API version ${config.version}` : ''}'
       }
     ],
     paths: {
-      '${config.basePath}': {
+      '${versionedBasePath}': {
         get: {
           summary: 'Get all ${config.name.toLowerCase()}s',
-          tags: ['${config.name}'],
+          tags: ['${config.name}${config.version ? ` v${config.version}` : ''}'],
           responses: {
             '200': {
               description: 'List of ${config.name.toLowerCase()}s',
@@ -53,7 +55,7 @@ export function setupSwagger(app: express.Express): void {
         },
         post: {
           summary: 'Create a new ${config.name.toLowerCase()}',
-          tags: ['${config.name}'],
+          tags: ['${config.name}${config.version ? ` v${config.version}` : ''}'],
           requestBody: {
             required: true,
             content: {
@@ -81,10 +83,10 @@ export function setupSwagger(app: express.Express): void {
           }
         }
       },
-      '${config.basePath}/{id}': {
+      '${versionedBasePath}/{id}': {
         get: {
           summary: 'Get ${config.name.toLowerCase()} by ID',
-          tags: ['${config.name}'],
+          tags: ['${config.name}${config.version ? ` v${config.version}` : ''}'],
           parameters: [
             {
               name: 'id',
@@ -113,7 +115,7 @@ export function setupSwagger(app: express.Express): void {
         },
         patch: {
           summary: 'Update ${config.name.toLowerCase()}',
-          tags: ['${config.name}'],
+          tags: ['${config.name}${config.version ? ` v${config.version}` : ''}'],
           parameters: [
             {
               name: 'id',
@@ -152,7 +154,7 @@ export function setupSwagger(app: express.Express): void {
         },
         delete: {
           summary: 'Delete ${config.name.toLowerCase()}',
-          tags: ['${config.name}'],
+          tags: ['${config.name}${config.version ? ` v${config.version}` : ''}'],
           parameters: [
             {
               name: 'id',
@@ -185,10 +187,10 @@ export function setupSwagger(app: express.Express): void {
           }
         }
       },
-      '${config.basePath}/{id}/status': {
+      '${versionedBasePath}/{id}/status': {
         patch: {
           summary: 'Update ${config.name.toLowerCase()} status',
-          tags: ['${config.name}'],
+          tags: ['${config.name}${config.version ? ` v${config.version}` : ''}'],
           parameters: [
             {
               name: 'id',
@@ -343,12 +345,16 @@ ${config.properties.map(prop => {
     }
   };
 
-  // Add swagger routes
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(spec));
-  app.get('/api-spec.json', (req, res) => {
+  // Add swagger routes with version in the path if applicable
+  const docsPath = ${config.version ? `'/api-docs${version}'` : `'/api-docs'`};
+  app.use(docsPath, swaggerUi.serve, swaggerUi.setup(spec));
+  
+  // Add a route to get the OpenAPI spec as JSON
+  const specPath = ${config.version ? `'/api-spec${version}.json'` : `'/api-spec.json'`};
+  app.get(specPath, (req, res) => {
     res.json(spec);
   });
   
-  console.log(\`Swagger UI available at http://localhost:3000/api-docs\`);
+  console.log(\`Swagger UI available at http://localhost:3000\${docsPath}\`);
 }`;
 }
