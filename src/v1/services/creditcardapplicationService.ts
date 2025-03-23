@@ -33,6 +33,10 @@ export class CreditCardApplicationService {
     return this.creditCardApplicationRepository.update(id, data);
   }
   
+  // Update credit card application email
+  async updateEmail(id: string, email: string): Promise<CreditCardApplication | undefined> {
+    return this.creditCardApplicationRepository.update(id, { email });
+  }
   // Update credit card application status
   async updateStatus(id: string, status: 'PENDING' | 'REVIEWING' | 'APPROVED' | 'REJECTED'): Promise<CreditCardApplication | undefined> {
     return this.creditCardApplicationRepository.updateStatus(id, status);

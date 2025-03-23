@@ -1,119 +1,125 @@
 {
-    "name": "CreditCardApplication",
-    "basePath": "/card-applications",
-    "serviceName": "CreditCardApplicationService",
-    "serviceImportPath": "../services/creditcardapplicationService",
-    "entityName": "CreditCardApplication",
-    "generateRepository": true,
-    "generateDtos": true,
-    "version": "1",
-    "properties": [
-      {
-        "name": "applicantName",
-        "type": "string",
-        "required": true,
-        "description": "Full name of the applicant"
-      },
-      {
-        "name": "email",
-        "type": "string",
-        "required": true,
-        "description": "Email address of the applicant"
-      },
-      {
-        "name": "phoneNumber",
-        "type": "string",
-        "required": true,
-        "description": "Contact phone number"
-      },
-      {
-        "name": "address",
-        "type": "string",
-        "required": true,
-        "description": "Physical address"
-      },
-      {
-        "name": "income",
-        "type": "number",
-        "required": true,
-        "description": "Annual income in USD"
-      },
-      {
-        "name": "employmentStatus",
-        "type": "'FULL_TIME' | 'PART_TIME' | 'SELF_EMPLOYED' | 'UNEMPLOYED'",
-        "required": true,
-        "description": "Current employment status"
-      },
-      {
-        "name": "creditCardType",
-        "type": "'BASIC' | 'PREMIUM' | 'PLATINUM'",
-        "required": true,
-        "description": "Type of credit card being applied for"
-      },
-      {
-        "name": "status",
-        "type": "'PENDING' | 'REVIEWING' | 'APPROVED' | 'REJECTED'",
-        "required": true,
-        "description": "Current status of the application"
-      },
-      {
-        "name": "creditScore",
-        "type": "number",
-        "required": false,
-        "description": "Applicant's credit score (optional, retrieved during processing)"
-      },
-      {
-        "name": "documents",
-        "type": "string[]",
-        "required": false,
-        "description": "References to uploaded documents"
-      },
-      {
-        "name": "notes",
-        "type": "string",
-        "required": false,
-        "description": "Additional notes for the application"
-      }
-    ],
-    "endpoints": [
-      {
-        "method": "get",
-        "path": "/",
-        "handler": "getAllApplications",
-        "enableLogging": true,
-        "description": "Retrieve all credit card applications"
-      },
-      {
-        "method": "get",
-        "path": "/:id",
-        "handler": "getApplicationById",
-        "enableLogging": true,
-        "description": "Retrieve a specific credit card application by ID"
-      },
-      {
-        "method": "post",
-        "path": "/",
-        "handler": "createApplication",
-        "statusCode": 201,
-        "description": "Submit a new credit card application"
-      },
-      {
-        "method": "patch",
-        "path": "/:id",
-        "handler": "updateApplication",
-        "description": "Update an existing credit card application"
-      },
-      {
-        "method": "patch",
-        "path": "/:id/status",
-        "handler": "updateApplicationStatus",
-        "description": "Update the status of a credit card application"
-      },
-      {
-        "method": "delete",
-        "path": "/:id",
-        "handler": "deleteApplication",
-        "description": "Delete a credit card application"
-      }
-    ]
-  }
+  "name": "CreditCardApplication",
+  "basePath": "/card-applications",
+  "serviceName": "CreditCardApplicationService",
+  "serviceImportPath": "../services/creditcardapplicationService",
+  "entityName": "CreditCardApplication",
+  "generateRepository": true,
+  "generateDtos": true,
+  "version": "1",
+  "properties": [
+    {
+      "name": "applicantName",
+      "type": "string",
+      "required": true,
+      "description": "Full name of the applicant"
+    },
+    {
+      "name": "email",
+      "type": "string",
+      "required": true,
+      "description": "Email address of the applicant"
+    },
+    {
+      "name": "phoneNumber",
+      "type": "string",
+      "required": true,
+      "description": "Contact phone number"
+    },
+    {
+      "name": "address",
+      "type": "string",
+      "required": true,
+      "description": "Physical address"
+    },
+    {
+      "name": "income",
+      "type": "number",
+      "required": true,
+      "description": "Annual income in USD"
+    },
+    {
+      "name": "employmentStatus",
+      "type": "'FULL_TIME' | 'PART_TIME' | 'SELF_EMPLOYED' | 'UNEMPLOYED'",
+      "required": true,
+      "description": "Current employment status"
+    },
+    {
+      "name": "creditCardType",
+      "type": "'BASIC' | 'PREMIUM' | 'PLATINUM'",
+      "required": true,
+      "description": "Type of credit card being applied for"
+    },
+    {
+      "name": "status",
+      "type": "'PENDING' | 'REVIEWING' | 'APPROVED' | 'REJECTED'",
+      "required": true,
+      "description": "Current status of the application"
+    },
+    {
+      "name": "creditScore",
+      "type": "number",
+      "required": false,
+      "description": "Applicant's credit score (optional, retrieved during processing)"
+    },
+    {
+      "name": "documents",
+      "type": "string[]",
+      "required": false,
+      "description": "References to uploaded documents"
+    },
+    {
+      "name": "notes",
+      "type": "string",
+      "required": false,
+      "description": "Additional notes for the application"
+    }
+  ],
+  "endpoints": [
+    {
+      "method": "get",
+      "path": "/",
+      "handler": "getAllApplications",
+      "enableLogging": true,
+      "description": "Retrieve all credit card applications"
+    },
+    {
+      "method": "get",
+      "path": "/:id",
+      "handler": "getApplicationById",
+      "enableLogging": true,
+      "description": "Retrieve a specific credit card application by ID"
+    },
+    {
+      "method": "post",
+      "path": "/",
+      "handler": "createApplication",
+      "statusCode": 201,
+      "description": "Submit a new credit card application"
+    },
+    {
+      "method": "patch",
+      "path": "/:id",
+      "handler": "updateApplication",
+      "description": "Update an existing credit card application"
+    },
+    {
+      "method": "patch",
+      "path": "/:id/email",
+      "handler": "updateApplicationEmail",
+      "description": "Update the email address for an application"
+    },
+    {
+      "method": "patch",
+      "path": "/:id/status",
+      "handler": "updateApplicationStatus",
+      "description": "Update the status of a credit card application"
+    },
+    {
+      "method": "delete",
+      "path": "/:id",
+      "handler": "deleteApplication",
+      "description": "Delete a credit card application"
+    }
+  ]
+}

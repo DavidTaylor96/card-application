@@ -22,6 +22,34 @@ export interface ControllerConfig {
 }
 
 /**
+ * Checks if an endpoint is targeting a specific field update based on its path
+ * e.g. /:id/email would update just the email field
+ */
+function isSpecializedEndpoint(path: string): {isSpecialized: boolean, fieldName?: string} {
+  // Check if the path matches pattern /:id/fieldname
+  const specializedMatch = path.match(/\/:id\/([a-zA-Z0-9_]+)$/);
+  if (specializedMatch && specializedMatch[1] && specializedMatch[1] !== 'status') {
+    return { isSpecialized: true, fieldName: specializedMatch[1] };
+  }
+  return { isSpecialized: false };
+}
+
+/**
+ * Gets the property definition for a specific field
+ */
+function getPropertyForField(fieldName: string, properties?: EntityProperty[]): EntityProperty | undefined {
+  if (!properties) return undefined;
+  return properties.find(prop => prop.name === fieldName);
+}
+
+/**
+ * Capitalize the first letter of a string
+ */
+function capitalize(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
  * Generates controller class code as a string based on configuration
  */
 export function generateControllerCode(config: ControllerConfig & { properties?: EntityProperty[] }): string {
@@ -84,6 +112,10 @@ export class ${controllerClass} {
   endpoints.forEach(endpoint => {
     const { method, path, handler, statusCode, enableLogging, description } = endpoint;
     
+    // Check if this is a specialized field update endpoint
+    const { isSpecialized, fieldName } = isSpecializedEndpoint(path);
+    const fieldProperty = isSpecialized && fieldName ? getPropertyForField(fieldName, properties) : undefined;
+    
     // Add JSDoc if description is provided
     if (description) {
       code += `
@@ -93,7 +125,8 @@ export class ${controllerClass} {
     }
     
     // Add OpenAPI decorator
-    const isStatusUpdate = path.includes('status');
+    const isStatusUpdate = path.includes('/status');
+    
     code += `
   @OpenAPI({
     summary: '${description || handler}${version ? ` (v${version})` : ''}',
@@ -103,7 +136,32 @@ export class ${controllerClass} {
       400: { description: 'Bad Request' },
       404: { description: 'Not Found' },
       500: { description: 'Internal Server Error' }
-    }${isStatusUpdate && statusProperty ? `,
+    }`;
+    
+    // Add specialized requestBody schema for specific field updates
+    if (isSpecialized && fieldName && fieldProperty) {
+      code += `,
+    requestBody: {
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            properties: {
+              ${fieldName}: {
+                type: '${fieldProperty.type === 'number' ? 'number' : fieldProperty.type === 'boolean' ? 'boolean' : 'string'}'
+                ${fieldProperty.type.includes('|') ? `,
+                enum: [${fieldProperty.type.split('|').map(t => t.trim().replace(/['"]/g, '')).map(v => `'${v}'`).join(', ')}]` : ''}
+              }
+            },
+            required: ['${fieldName}']
+          }
+        }
+      }
+    }`;
+    }
+    // Add status update specific schema
+    else if (isStatusUpdate && statusProperty) {
+      code += `,
     requestBody: {
       content: {
         'application/json': {
@@ -119,7 +177,10 @@ export class ${controllerClass} {
           }
         }
       }
-    }` : ''}
+    }`;
+    }
+    
+    code += `
   })`;
     
     // Add logging decorator if enabled
@@ -174,7 +235,7 @@ export class ${controllerClass} {
   async ${handler}(@Body() data: Create${name}Dto): Promise<${name}> {
     return await this.${entityNameCamelCase}Service.create(data);
   }`;
-    } else if ((method === 'put' || method === 'patch') && isStatusUpdate) {
+    } else if (isStatusUpdate) {
       // Status update endpoint with proper status type
       code += `
   async ${handler}(@Param('${paramName}') ${paramName}: string, @Body() data: { status: ${hasStatusType ? `${name}Status` : 'string'} }): Promise<${name}> {
@@ -186,8 +247,25 @@ export class ${controllerClass} {
     
     return result;
   }`;
+    } else if (isSpecialized && fieldName && fieldProperty) {
+      // Specialized field update endpoint
+      const fieldType = fieldProperty.type.includes('|') ? 
+                        fieldProperty.type : 
+                        fieldProperty.type === 'number' ? 'number' : 
+                        fieldProperty.type === 'boolean' ? 'boolean' : 'string';
+      
+      code += `
+  async ${handler}(@Param('${paramName}') ${paramName}: string, @Body() data: { ${fieldName}: ${fieldType} }): Promise<${name}> {
+    const result = await this.${entityNameCamelCase}Service.update${capitalize(fieldName)}(${paramName}, data.${fieldName});
+    
+    if (!result) {
+      throw new NotFoundError('Resource not found');
+    }
+    
+    return result;
+  }`;
     } else if (method === 'put' || method === 'patch') {
-      // Update endpoint
+      // Standard update endpoint
       code += `
   async ${handler}(@Param('${paramName}') ${paramName}: string, @Body() data: Update${name}Dto): Promise<${name}> {
     const result = await this.${entityNameCamelCase}Service.update(${paramName}, data);

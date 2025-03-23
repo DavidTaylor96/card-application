@@ -116,6 +116,45 @@ export class CreditCardApplicationController {
     return result;
   }
   /**
+   * Update the email address for an application (API v1)
+   */
+  @OpenAPI({
+    summary: 'Update the email address for an application (v1)',
+    description: 'Update the email address for an application - API Version 1',
+    responses: {
+      200: { description: 'Success' },
+      400: { description: 'Bad Request' },
+      404: { description: 'Not Found' },
+      500: { description: 'Internal Server Error' }
+    },
+    requestBody: {
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            properties: {
+              email: {
+                type: 'string'
+                
+              }
+            },
+            required: ['email']
+          }
+        }
+      }
+    }
+  })
+  @Patch('/:id/email')
+  async updateApplicationEmail(@Param('id') id: string, @Body() data: { email: string }): Promise<CreditCardApplication> {
+    const result = await this.creditCardApplicationService.updateEmail(id, data.email);
+    
+    if (!result) {
+      throw new NotFoundError('Resource not found');
+    }
+    
+    return result;
+  }
+  /**
    * Update the status of a credit card application (API v1)
    */
   @OpenAPI({

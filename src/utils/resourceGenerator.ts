@@ -63,12 +63,30 @@ ${statusTypeExport}export interface ${entityName} {
 }
 
 /**
+ * Capitalizes the first letter of a string
+ */
+function capitalize(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
  * Generates a service class for the entity
  */
 export function generateServiceCode(config: ResourceConfig): string {
-  const { entityName, serviceName } = config;
+  const { entityName, serviceName, endpoints } = config;
   const statusProperty = config.properties.find(p => p.name === 'status');
   const hasStatusField = !!statusProperty;
+  
+  // Check for specialized field update endpoints
+  const specializedFields: string[] = [];
+  endpoints.forEach(endpoint => {
+    if (endpoint.path.includes('/:id/') && !endpoint.path.includes('/status')) {
+      const fieldMatch = endpoint.path.match(/\/:id\/([a-zA-Z0-9_]+)$/);
+      if (fieldMatch && fieldMatch[1]) {
+        specializedFields.push(fieldMatch[1]);
+      }
+    }
+  });
   
   // Convert entity name to proper camelCase for variables
   const entityNameCamelCase = entityName.charAt(0).toLowerCase() + entityName.slice(1);
@@ -146,9 +164,42 @@ export class ${versionedServiceName} {
     };
     
     return ${entityNameCamelCase}s[index];`}
-  }
-  ${hasStatusField ? `
-  // Update ${readableEntityName} status
+  }`;
+
+  // Add specialized field update methods
+  specializedFields.forEach(fieldName => {
+    const fieldProperty = config.properties.find(p => p.name === fieldName);
+    if (fieldProperty) {
+      const fieldType = fieldProperty.type;
+      
+      code += `
+  
+  // Update ${readableEntityName} ${fieldName}
+  async update${capitalize(fieldName)}(id: string, ${fieldName}: ${fieldType}): Promise<${entityName} | undefined> {
+    ${config.generateRepository ? 
+      `return this.${entityNameCamelCase}Repository.update(id, { ${fieldName} });` : 
+      `const index = ${entityNameCamelCase}s.findIndex(item => item.id === id);
+    
+    if (index === -1) {
+      return undefined;
+    }
+    
+    ${entityNameCamelCase}s[index] = {
+      ...${entityNameCamelCase}s[index],
+      ${fieldName},
+      updatedAt: new Date().toISOString()
+    };
+    
+    return ${entityNameCamelCase}s[index];`}
+  }`;
+    }
+  });
+
+  // Add status update method
+  if (hasStatusField) {
+    code += `
+  ${specializedFields.length > 0 ? '' : `
+  `}// Update ${readableEntityName} status
   async updateStatus(id: string, status: ${statusType}): Promise<${entityName} | undefined> {
     ${config.generateRepository ? 
       `return this.${entityNameCamelCase}Repository.updateStatus(id, status);` : 
@@ -165,7 +216,11 @@ export class ${versionedServiceName} {
     };
     
     return ${entityNameCamelCase}s[index];`}
-  }` : ''}
+  }`;
+  }
+  
+  // Add delete method
+  code += `
   
   // Delete ${readableEntityName}
   async delete(id: string): Promise<boolean> {

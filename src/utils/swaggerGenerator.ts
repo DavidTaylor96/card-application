@@ -1,9 +1,27 @@
 import { ResourceConfig } from './resourceGenerator';
 
 /**
+ * Checks if an endpoint is targeting a specific field update
+ */
+function getSpecializedFieldEndpoints(endpoints: any[]): string[] {
+  const specializedFields: string[] = [];
+  
+  endpoints.forEach(endpoint => {
+    const match = endpoint.path.match(/\/:id\/([a-zA-Z0-9_]+)$/);
+    if (match && match[1] && match[1] !== 'status') {
+      specializedFields.push(match[1]);
+    }
+  });
+  
+  return [...new Set(specializedFields)]; // Remove duplicates
+}
+
+/**
  * Generates Swagger setup code
  */
 export function generateSwaggerSetup(config: ResourceConfig): string {
+  // Get specialized field endpoints
+  const specializedFields = getSpecializedFieldEndpoints(config.endpoints);
 
   return `// src/swagger.ts
 import * as swaggerUi from 'swagger-ui-express';
@@ -235,7 +253,61 @@ export function setupSwagger(app: express.Express, version?: string, isDefault: 
             }
           }
         }
-      }
+      },
+      ${specializedFields.map(field => {
+        const fieldProperty = config.properties.find(p => p.name === field);
+        if (!fieldProperty) return '';
+        
+        return `[versionPath + '${config.basePath}/{id}/${field}']: {
+        patch: {
+          summary: 'Update ${config.name.toLowerCase()} ${field}',
+          tags: ['${config.name}' + (version ? \` v\${specVersion}\` : '')],
+          parameters: [
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: {
+                type: 'string'
+              }
+            }
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    ${field}: {
+                      type: '${fieldProperty.type === 'number' ? 'number' : fieldProperty.type === 'boolean' ? 'boolean' : 'string'}'
+                      ${fieldProperty.type.includes('|') ? `,
+                      enum: [${fieldProperty.type.split('|').map(t => t.trim().replace(/['"]/g, '')).map(v => `'${v}'`).join(', ')}]` : ''}
+                    }
+                  },
+                  required: ['${field}']
+                }
+              }
+            }
+          },
+          responses: {
+            '200': {
+              description: '${field} updated',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/${config.name}'
+                  }
+                }
+              }
+            },
+            '404': {
+              description: '${config.name} not found'
+            }
+          }
+        }
+      }`;
+      }).join(',\n      ')}
     },
     components: {
       schemas: {
