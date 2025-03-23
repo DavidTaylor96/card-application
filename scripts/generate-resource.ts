@@ -11,6 +11,7 @@ let configPath: string | undefined;
 let generateServerConfig = false;
 let generateSwaggerConfig = false;
 let apiVersion: string | undefined;
+let versionedEndpoints = true; // Default to versioned endpoints
 
 // Parse command line arguments
 for (let i = 0; i < args.length; i++) {
@@ -28,19 +29,29 @@ for (let i = 0; i < args.length; i++) {
       apiVersion = args[i + 1];
       i++; // Skip the next arg since we consumed it
     }
+  } else if (arg === '--no-versioned-endpoints') {
+    versionedEndpoints = false;
   } else if (!configPath && !arg.startsWith('-')) {
     configPath = arg;
   }
 }
 
+// Display help if needed
+if (args.includes('--help') || args.includes('-h')) {
+  console.log('Usage: generate-resource <config-file.json> [options]');
+  console.log('\nOptions:');
+  console.log('  --server, -s                     Generate server configuration files');
+  console.log('  --swagger, -sw                   Generate Swagger documentation setup');
+  console.log('  --version=VERSION, -v VERSION    Specify API version number (e.g., 1, 2)');
+  console.log('  --no-versioned-endpoints         Don\'t prefix endpoints with version (e.g., /resource instead of /v1/resource)');
+  console.log('  --help, -h                       Show this help message');
+  process.exit(0);
+}
+
 // Check if a config file path was provided
 if (!configPath) {
-  console.error('Please provide a path to the resource configuration JSON file');
-  console.error('Usage: generate-resource.ts <config-file.json> [--server] [--swagger] [--version=VERSION]');
-  console.error('Options:');
-  console.error('  --server, -s              Generate server configuration files');
-  console.error('  --swagger, -sw            Generate Swagger documentation setup');
-  console.error('  --version=VERSION, -v VERSION    Specify API version number (e.g., 1, 2)');
+  console.error('Error: Please provide a path to the resource configuration JSON file');
+  console.error('Run with --help for usage information');
   process.exit(1);
 }
 
@@ -54,20 +65,69 @@ try {
   // Add version to the config if specified
   if (apiVersion) {
     config.version = apiVersion;
+    
+    // Override version in config file if specified in command line
+    console.log(`Using API version: v${apiVersion}`);
+    
+    // Configure whether to prefix endpoints with version
+    if (!versionedEndpoints) {
+      console.log('Not using versioned endpoints prefix');
+    }
+  } else if (config.version) {
+    console.log(`Using API version from config: v${config.version}`);
   }
+  
+  // Store versioned endpoints flag in config
+  (config as any).useVersionedEndpoints = versionedEndpoints;
 } catch (error: any) {
   console.error(`Error reading configuration file: ${error.message}`);
   process.exit(1);
 }
 
 try {
+  // Create version directories structure if version is specified
+  if (config.version) {
+    const baseDir = process.cwd();
+    const versionDirs = [
+      path.join(baseDir, `src/v${config.version}`),
+      path.join(baseDir, `src/v${config.version}/controllers`),
+      path.join(baseDir, `src/v${config.version}/services`),
+      path.join(baseDir, `src/v${config.version}/models`),
+      path.join(baseDir, `src/v${config.version}/models/interfaces`),
+    ];
+    
+    if (config.generateRepository) {
+      versionDirs.push(path.join(baseDir, `src/v${config.version}/repositories`));
+    }
+    
+    if (config.generateDtos) {
+      versionDirs.push(path.join(baseDir, `src/v${config.version}/dtos`));
+    }
+    
+    // Only create version directories if user wants them
+    if (versionedEndpoints) {
+      versionDirs.forEach(dir => {
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+          console.log(`Created version directory: ${dir}`);
+        }
+      });
+    }
+  }
+  
+  // Handle versioned paths for endpoints
+  if (config.version && versionedEndpoints && !config.basePath.startsWith(`/v${config.version}`)) {
+    config.basePath = `/v${config.version}${config.basePath}`;
+  }
+  
   // Generate all the resource files
   generateResource(config);
   console.log(`Resource ${config.name}${config.version ? ` (v${config.version})` : ''} successfully generated!`);
   
   // Generate server configuration if requested
   if (generateServerConfig) {
-    generateServerSetup(process.cwd());
+    // Pass version info through the config object instead
+    generateServerSetup(process.cwd(), config.version);
     console.log(`Server configuration generated with versioning support. Don't forget to run 'npm install' to install the new dependencies!`);
   }
   
@@ -79,27 +139,357 @@ try {
       fs.mkdirSync(swaggerDir, { recursive: true });
     }
     
-    // Generate swagger spec file
+    // Generate swagger spec file with appropriate version
     const specFileName = config.version ? 
       `openapi-v${config.version}.json` : 
       'openapi.json';
       
     const swaggerPath = path.join(swaggerDir, specFileName);
     
-    // Generate the swagger setup (modified to support versioning)
-    const swaggerCode = generateSwaggerSetup(config);
-    
-    // Extract the spec JSON from the generated code
-    const specMatch = swaggerCode.match(/const\s+spec\s*=\s*({[\s\S]*?});/);
-    if (specMatch && specMatch[1]) {
-      try {
-        // Format the spec JSON and write it to file
-        const specJson = eval(`(${specMatch[1]})`); // Safe in this context as we control the source
-        fs.writeFileSync(swaggerPath, JSON.stringify(specJson, null, 2));
-        console.log(`Swagger specification generated at ${swaggerPath}`);
-      } catch (error) {
-        console.error('Error extracting Swagger spec:', error);
-      }
+    // Generate the swagger setup (with versioning support)
+    // And use it to build a complete OpenAPI spec
+    try {
+      // Generate full OpenAPI spec with paths and schemas
+      const versionPrefix = config.version ? `/v${config.version}` : '';
+      const spec = {
+        openapi: '3.0.0',
+        info: {
+          title: `${config.name} API${config.version ? ` (v${config.version})` : ''}`,
+          version: config.version || '1.0.0',
+          description: `API for managing ${config.name.toLowerCase()}`
+        },
+        servers: [
+          {
+            url: `/api${versionPrefix}`,
+            description: `API Server${config.version ? ` v${config.version}` : ''}`
+          }
+        ],
+        tags: [
+          {
+            name: `${config.name}`,
+            description: `${config.name} operations${config.version ? ` - API version ${config.version}` : ''}`
+          }
+        ],
+        paths: {
+          [`${config.basePath}`]: {
+            get: {
+              summary: `Get all ${config.name.toLowerCase()}s`,
+              tags: [`${config.name}`],
+              responses: {
+                '200': {
+                  description: `List of ${config.name.toLowerCase()}s`,
+                  content: {
+                    'application/json': {
+                      schema: {
+                        type: 'array',
+                        items: {
+                          $ref: `#/components/schemas/${config.name}`
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            post: {
+              summary: `Create a new ${config.name.toLowerCase()}`,
+              tags: [`${config.name}`],
+              requestBody: {
+                required: true,
+                content: {
+                  'application/json': {
+                    schema: {
+                      $ref: `#/components/schemas/Create${config.name}`
+                    }
+                  }
+                }
+              },
+              responses: {
+                '201': {
+                  description: `${config.name} created successfully`,
+                  content: {
+                    'application/json': {
+                      schema: {
+                        $ref: `#/components/schemas/${config.name}`
+                      }
+                    }
+                  }
+                },
+                '400': {
+                  description: 'Invalid input'
+                }
+              }
+            }
+          },
+          [`${config.basePath}/{id}`]: {
+            get: {
+              summary: `Get ${config.name.toLowerCase()} by ID`,
+              tags: [`${config.name}`],
+              parameters: [
+                {
+                  name: 'id',
+                  in: 'path',
+                  required: true,
+                  schema: {
+                    type: 'string'
+                  }
+                }
+              ],
+              responses: {
+                '200': {
+                  description: `${config.name} details`,
+                  content: {
+                    'application/json': {
+                      schema: {
+                        $ref: `#/components/schemas/${config.name}`
+                      }
+                    }
+                  }
+                },
+                '404': {
+                  description: `${config.name} not found`
+                }
+              }
+            },
+            patch: {
+              summary: `Update ${config.name.toLowerCase()}`,
+              tags: [`${config.name}`],
+              parameters: [
+                {
+                  name: 'id',
+                  in: 'path',
+                  required: true,
+                  schema: {
+                    type: 'string'
+                  }
+                }
+              ],
+              requestBody: {
+                required: true,
+                content: {
+                  'application/json': {
+                    schema: {
+                      $ref: `#/components/schemas/Update${config.name}`
+                    }
+                  }
+                }
+              },
+              responses: {
+                '200': {
+                  description: `${config.name} updated`,
+                  content: {
+                    'application/json': {
+                      schema: {
+                        $ref: `#/components/schemas/${config.name}`
+                      }
+                    }
+                  }
+                },
+                '404': {
+                  description: `${config.name} not found`
+                }
+              }
+            },
+            delete: {
+              summary: `Delete ${config.name.toLowerCase()}`,
+              tags: [`${config.name}`],
+              parameters: [
+                {
+                  name: 'id',
+                  in: 'path',
+                  required: true,
+                  schema: {
+                    type: 'string'
+                  }
+                }
+              ],
+              responses: {
+                '200': {
+                  description: `${config.name} deleted`,
+                  content: {
+                    'application/json': {
+                      schema: {
+                        type: 'object',
+                        properties: {
+                          success: {
+                            type: 'boolean'
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                '404': {
+                  description: `${config.name} not found`
+                }
+              }
+            }
+          },
+          [`${config.basePath}/{id}/status`]: {
+            patch: {
+              summary: `Update ${config.name.toLowerCase()} status`,
+              tags: [`${config.name}`],
+              parameters: [
+                {
+                  name: 'id',
+                  in: 'path',
+                  required: true,
+                  schema: {
+                    type: 'string'
+                  }
+                }
+              ],
+              requestBody: {
+                required: true,
+                content: {
+                  'application/json': {
+                    schema: {
+                      $ref: '#/components/schemas/StatusUpdate'
+                    }
+                  }
+                }
+              },
+              responses: {
+                '200': {
+                  description: 'Status updated',
+                  content: {
+                    'application/json': {
+                      schema: {
+                        $ref: `#/components/schemas/${config.name}`
+                      }
+                    }
+                  }
+                },
+                '404': {
+                  description: `${config.name} not found`
+                }
+              }
+            }
+          }
+        },
+        components: {
+          schemas: {
+            [config.name]: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                ...config.properties.reduce((acc: any, prop) => {
+                  const propType = prop.type === 'number' ? 'number' : 
+                                  prop.type === 'boolean' ? 'boolean' : 
+                                  prop.type.endsWith('[]') ? 'array' : 'string';
+                  
+                  let propDef: any = {
+                    type: propType
+                  };
+                  
+                  if (prop.type.includes('|')) {
+                    const enumValues = prop.type
+                      .split('|')
+                      .map(t => t.trim().replace(/['"]/g, ''));
+                    propDef.enum = enumValues;
+                  }
+                  
+                  if (propType === 'array') {
+                    propDef.items = { 
+                      type: 'string' 
+                    };
+                  }
+                  
+                  acc[prop.name] = propDef;
+                  return acc;
+                }, {}),
+                createdAt: { type: 'string', format: 'date-time' },
+                updatedAt: { type: 'string', format: 'date-time' }
+              }
+            },
+            [`Create${config.name}`]: {
+              type: 'object',
+              required: config.properties
+                .filter(p => p.required !== false)
+                .map(p => p.name),
+              properties: config.properties.reduce((acc: any, prop) => {
+                const propType = prop.type === 'number' ? 'number' : 
+                                prop.type === 'boolean' ? 'boolean' : 
+                                prop.type.endsWith('[]') ? 'array' : 'string';
+                
+                let propDef: any = {
+                  type: propType
+                };
+                
+                if (prop.type.includes('|')) {
+                  const enumValues = prop.type
+                    .split('|')
+                    .map(t => t.trim().replace(/['"]/g, ''));
+                  propDef.enum = enumValues;
+                }
+                
+                if (propType === 'array') {
+                  propDef.items = { 
+                    type: 'string' 
+                  };
+                }
+                
+                acc[prop.name] = propDef;
+                return acc;
+              }, {})
+            },
+            [`Update${config.name}`]: {
+              type: 'object',
+              properties: config.properties.reduce((acc: any, prop) => {
+                const propType = prop.type === 'number' ? 'number' : 
+                                prop.type === 'boolean' ? 'boolean' : 
+                                prop.type.endsWith('[]') ? 'array' : 'string';
+                
+                let propDef: any = {
+                  type: propType
+                };
+                
+                if (prop.type.includes('|')) {
+                  const enumValues = prop.type
+                    .split('|')
+                    .map(t => t.trim().replace(/['"]/g, ''));
+                  propDef.enum = enumValues;
+                }
+                
+                if (propType === 'array') {
+                  propDef.items = { 
+                    type: 'string' 
+                  };
+                }
+                
+                acc[prop.name] = propDef;
+                return acc;
+              }, {})
+            },
+            StatusUpdate: {
+              type: 'object',
+              required: ['status'],
+              properties: {
+                status: (() => {
+                  const statusProp = config.properties.find(p => p.name === 'status' && p.type.includes('|'));
+                  if (statusProp) {
+                    return {
+                      type: 'string',
+                      enum: statusProp.type
+                        .split('|')
+                        .map(t => t.trim().replace(/['"]/g, ''))
+                    };
+                  }
+                  return {
+                    type: 'string'
+                  };
+                })()
+              }
+            }
+          }
+        }
+      };
+      
+      // Write the spec to file
+      fs.writeFileSync(swaggerPath, JSON.stringify(spec, null, 2));
+      console.log(`Full Swagger specification generated at ${swaggerPath}`);
+    } catch (error) {
+      console.error('Error creating Swagger spec:', error);
     }
     
     // Also generate the setup file
@@ -112,83 +502,81 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 
-export function setupSwagger(app: express.Express): void {
-  // Load all OpenAPI spec files from the api-specs directory
-  const specsDir = path.join(__dirname, 'api-specs');
+export function setupSwagger(app: express.Express, version?: string, isDefault: boolean = false): void {
+  // If no specific version is provided and not the default, do nothing
+  if (!version && !isDefault) return;
   
-  if (fs.existsSync(specsDir)) {
-    const specFiles = fs.readdirSync(specsDir)
-      .filter(file => file.endsWith('.json'))
-      .map(file => path.join(specsDir, file));
-    
-    if (specFiles.length === 0) {
-      console.warn('No OpenAPI spec files found in api-specs directory');
-      return;
-    }
-    
-    // Set up a route for each version
-    specFiles.forEach(specFile => {
-      try {
-        const specContent = fs.readFileSync(specFile, 'utf8');
-        const spec = JSON.parse(specContent);
-        
-        // Extract version from filename (openapi-v1.json -> v1)
-        const versionMatch = path.basename(specFile).match(/openapi-(v\\d+)\.json/);
-        const versionPath = versionMatch ? \`/api-docs/\${versionMatch[1]}\` : '/api-docs';
-        
-        // Serve the Swagger UI for this version
-        app.use(versionPath, swaggerUi.serve, swaggerUi.setup(spec, {
-          swaggerOptions: {
-            docExpansion: 'list'
-          }
-        }));
-        
-        // Also provide the raw JSON
-        app.get(\`\${versionPath}.json\`, (req, res) => {
-          res.json(spec);
+  // Set up routes for swagger docs
+  const versionPath = version ? \`/v\${version}\` : '';
+  const docsPath = isDefault ? '/api-docs' : \`/api-docs\${versionPath}\`;
+  
+  // Try to find a pre-generated OpenAPI spec for this version
+  const specDir = path.join(__dirname, 'api-specs');
+  let specFile;
+  
+  if (fs.existsSync(specDir)) {
+    if (version) {
+      specFile = path.join(specDir, \`openapi-v\${version}.json\`);
+    } else {
+      // Get the latest version if no specific version provided
+      const versionPattern = /openapi-v(\\d+)\\.json/;
+      const specFiles = fs.readdirSync(specDir)
+        .filter(file => versionPattern.test(file))
+        .sort((a, b) => {
+          const vA = parseInt(a.match(versionPattern)?.[1] || '0');
+          const vB = parseInt(b.match(versionPattern)?.[1] || '0');
+          return vB - vA; // Sort descending to get latest version first
         });
         
-        console.log(\`Swagger UI for \${path.basename(specFile)} available at \${versionPath}\`);
-      } catch (error) {
-        console.error(\`Error setting up Swagger for \${specFile}:\`, error);
+      if (specFiles.length > 0) {
+        specFile = path.join(specDir, specFiles[0]);
       }
+    }
+  }
+  
+  // Use the spec if it exists
+  if (specFile && fs.existsSync(specFile)) {
+    const spec = JSON.parse(fs.readFileSync(specFile, 'utf8'));
+    app.use(docsPath, swaggerUi.serve);
+    app.get(docsPath, swaggerUi.setup(spec));
+    
+    // Also serve the spec as JSON
+    const specJsonPath = docsPath.replace('/api-docs', '/api-spec') + '.json';
+    app.get(specJsonPath, (req: express.Request, res: express.Response) => {
+      res.json(spec);
     });
     
-    // If we have multiple versions, create an index page
-    if (specFiles.length > 1) {
-      app.get('/api-docs', (req, res) => {
-        const versionLinks = specFiles.map(file => {
-          const versionMatch = path.basename(file).match(/openapi-(v\\d+)\.json/);
-          const version = versionMatch ? versionMatch[1] : 'default';
-          return \`<li><a href="/api-docs/\${version}">\${version}</a></li>\`;
-        });
-        
-        res.send(\`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>API Documentation</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; }
-              h1 { color: #333; }
-              ul { list-style-type: none; padding: 0; }
-              li { margin: 10px 0; }
-              a { color: #0366d6; text-decoration: none; }
-              a:hover { text-decoration: underline; }
-            </style>
-          </head>
-          <body>
-            <h1>API Documentation Versions</h1>
-            <ul>
-              \${versionLinks.join('')}
-            </ul>
-          </body>
-          </html>
-        \`);
-      });
-    }
+    console.log(\`Swagger UI for \${version ? 'v' + version : 'latest API'} available at http://localhost:3000\${docsPath}\`);
   } else {
-    console.warn('api-specs directory not found - Swagger documentation not available');
+    // Fall back to dynamic spec generation
+    const spec = {
+      openapi: '3.0.0',
+      info: {
+        title: 'API Documentation',
+        version: version || '1.0.0',
+        description: \`API documentation\${version ? \` for version \${version}\` : ''}\`
+      },
+      servers: [
+        {
+          url: \`/api\${versionPath}\`,
+          description: 'API Server'
+        }
+      ],
+      paths: {},
+      components: {
+        schemas: {}
+      }
+    };
+    
+    app.use(docsPath, swaggerUi.serve);
+    app.get(docsPath, swaggerUi.setup(spec));
+    
+    const specJsonPath = docsPath.replace('/api-docs', '/api-spec') + '.json';
+    app.get(specJsonPath, (req: express.Request, res: express.Response) => {
+      res.json(spec);
+    });
+    
+    console.log(\`Basic Swagger UI for \${version ? 'v' + version : 'API'} available at http://localhost:3000\${docsPath}\`);
   }
 }`;
       
@@ -204,6 +592,18 @@ export function setupSwagger(app: express.Express): void {
       console.log("2. Add: setupSwagger(app); after creating your Express app");
     }
   }
+
+  // Final instructions and version summary
+  if (config.version) {
+    console.log('\n--- API Version Summary ---');
+    console.log(`API Version: v${config.version}`);
+    console.log(`Base Path: ${config.basePath}`);
+    if (generateSwaggerConfig) {
+      console.log(`Documentation URL: /api-docs/v${config.version}`);
+    }
+    console.log('------------------------');
+  }
+
 } catch (error: any) {
   console.error(`Error generating resource: ${error.message}`);
   process.exit(1);

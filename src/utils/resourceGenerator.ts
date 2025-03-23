@@ -15,7 +15,7 @@ export interface ResourceConfig extends ControllerConfig {
   properties: EntityProperty[];
   generateRepository: boolean;
   generateDtos: boolean;
-  version?: string; // New field to specify API version
+  version?: string; // Field to specify API version
 }
 
 /**
@@ -79,9 +79,12 @@ export function generateServiceCode(config: ResourceConfig): string {
   // Define a type for the status if it exists
   const statusType = hasStatusField && statusProperty.type.includes('|') ? statusProperty.type : 'string';
   
-  let code = `// src/services/${entityNameCamelCase}Service.ts
+  // Add version suffix to service name if version is specified
+  const versionedServiceName = serviceName;
+  
+  let code = `// src/services/${entityNameCamelCase.toLowerCase()}${''}Service.ts
 import { ${entityName}${hasStatusField && statusProperty.type.includes('|') ? `, ${entityName}Status` : ''} } from '../models/interfaces/${entityNameCamelCase.toLowerCase()}.interface';
-${config.generateRepository ? `import { ${entityName}Repository } from '../repositories/${entityNameCamelCase.toLowerCase()}Repository';` : ''}
+${config.generateRepository ? `import { ${entityName}Repository${''} } from '../repositories/${entityNameCamelCase.toLowerCase()}${''}Repository';` : ''}
 
 ${hasStatusField && statusProperty.type.includes('|') ? 
   `// Valid status values: ${statusProperty.type}` : ''}
@@ -90,7 +93,7 @@ ${config.generateRepository ? '' : `// In-memory storage (will replace with data
 let ${entityNameCamelCase}s: ${entityName}[] = [];
 let nextId = 1;`}
 
-export class ${serviceName} {
+export class ${versionedServiceName} {
   ${config.generateRepository ? `private ${entityNameCamelCase}Repository: ${entityName}Repository;
   
   constructor() {
@@ -182,6 +185,7 @@ export class ${serviceName} {
 
   return code;
 }
+
 /**
  * Generates a repository class for the entity
  */
@@ -199,18 +203,17 @@ export function generateRepositoryCode(config: ResourceConfig): string {
   // Define a type for the status if it exists
   const statusType = hasStatusField && statusProperty.type.includes('|') ? statusProperty.type : 'string';
   
-  // Generate code for exporting status type if needed
-  const statusTypeExport = hasStatusField && statusProperty.type.includes('|') ? 
-    `export type ${entityName}Status = ${statusProperty.type};\n\n` : '';
+  // Add version suffix to repository name if version is specified
+  const versionedRepoName = `${entityName}Repository`;
   
-  let code = `// src/repositories/${entityNameCamelCase.toLowerCase()}Repository.ts
+  let code = `// src/repositories/${entityNameCamelCase.toLowerCase()}${''}Repository.ts
 import { ${entityName}${hasStatusField && statusProperty.type.includes('|') ? `, ${entityName}Status` : ''} } from '../models/interfaces/${entityNameCamelCase.toLowerCase()}.interface';
 
 // In-memory storage (will replace with database later)
 let ${entityNameCamelCase}s: ${entityName}[] = [];
 let nextId = 1;
 
-export class ${entityName}Repository {
+export class ${versionedRepoName} {
   // Find all ${readableEntityName}s
   async findAll(params?: any): Promise<${entityName}[]> {
     // TODO: Add filtering based on params
@@ -296,9 +299,12 @@ export function generateDtoCode(config: ResourceConfig): string {
   // Convert entity name to proper camelCase for variables
   const entityNameCamelCase = entityName.charAt(0).toLowerCase() + entityName.slice(1);
   
-  let code = `// src/dtos/${entityNameCamelCase.toLowerCase()}Dto.ts
+  // Build file path with version if needed
+  const filePath = `src/dtos/${entityNameCamelCase.toLowerCase()}Dto.ts`
+  
+  let code = `// ${filePath}
 import { IsString, IsEmail, IsOptional, IsNumber, IsBoolean, MinLength, IsIn, IsArray } from 'class-validator';
-import { ApiProperty } from '../decorators/api-property.decorator';
+import { ApiProperty } from '../../decorators/api-property.decorator';
 
 export class Create${entityName}Dto {`;
 
@@ -430,31 +436,26 @@ export class Update${entityName}Dto {`;
 }
 
 /**
- * Construct the version-specific path for a resource
- */
-function getVersionedPath(basePath: string, version?: string): string {
-  if (!version) return basePath;
-  return `/v${version}${basePath}`;
-}
-
-/**
  * Generates all files for a resource
  */
 export function generateResource(config: ResourceConfig): void {
   const baseDir = process.cwd();
   const { version } = config;
   
-  // Setup versioned paths for routes
-  const versionedBasePath = getVersionedPath(config.basePath, version);
-  const versionedConfig = { ...config, basePath: versionedBasePath };
+  // Add version prefix to basePath if specified
+  // This will create routes in the format /v1/resource-path instead of /resource-path
+  if (version && !config.basePath.startsWith(`/v${version}`)) {
+    config.basePath = `/v${version}${config.basePath}`;
+  }
   
   // Create directories if they don't exist
+
   const dirs = [
-    path.join(baseDir, 'src/controllers'),
-    path.join(baseDir, 'src/services'),
-    path.join(baseDir, 'src/models/interfaces'),
-    config.generateRepository ? path.join(baseDir, 'src/repositories') : null,
-    config.generateDtos ? path.join(baseDir, 'src/dtos') : null
+    path.join(baseDir, version ? `src/v${version}/controllers` :'src/controllers'),
+    path.join(baseDir, version ? `src/v${version}/services`: 'src/services'),
+    path.join(baseDir, version ? `src/v${version}/models/interfaces` :'src/models/interfaces'),
+    config.generateRepository ? path.join(baseDir,  version ? `src/v${version}/repositories` :'src/repositories') : null,
+    config.generateDtos ? path.join(baseDir, version ? `src/v${version}/dtos` : 'src/dtos') : null
   ].filter(Boolean);
   
   dirs.forEach((dir: any) => {
@@ -466,7 +467,7 @@ export function generateResource(config: ResourceConfig): void {
   // Determine file naming based on version
   const getVersionedFileName = (baseName: string) => {
     if (!version) return baseName;
-    return `${baseName}.v${version}`;
+    return `${baseName}`;
   };
   
   // Convert entity name to lowercase for file naming
@@ -475,32 +476,33 @@ export function generateResource(config: ResourceConfig): void {
   // Generate files
   const files = [
     {
-      path: path.join(baseDir, `src/models/interfaces/${entityLowerCase}.interface.ts`),
+      path: path.join(baseDir, version ? `src/v${version}/models/interfaces/${entityLowerCase}.interface.ts` : `src/models/interfaces/${entityLowerCase}.interface.ts`),
       content: generateInterfaceCode(config)
     },
     {
-      path: path.join(baseDir, `src/services/${getVersionedFileName(entityLowerCase)}Service.ts`),
+      path: path.join(baseDir, version ? `src/v${version}/services/${getVersionedFileName(entityLowerCase)}Service.ts` : `src/services/${getVersionedFileName(entityLowerCase)}Service.ts`),
       content: generateServiceCode(config)
     },
     {
-      path: path.join(baseDir, `src/controllers/${getVersionedFileName(entityLowerCase)}Controller.ts`),
-      content: generateControllerCode({...versionedConfig, properties: config.properties})
+      path: path.join(baseDir, version ? `src/v${version}/controllers/${getVersionedFileName(entityLowerCase)}Controller.ts` : `src/controllers/${getVersionedFileName(entityLowerCase)}Controller.ts`),
+      content: generateControllerCode({...config, properties: config.properties})
     }
   ];
-  
+
   if (config.generateRepository) {
     files.push({
-      path: path.join(baseDir, `src/repositories/${getVersionedFileName(entityLowerCase)}Repository.ts`),
+      path: path.join(baseDir, version ? `src/v${version}/repositories/${getVersionedFileName(entityLowerCase)}Repository.ts` : `src/repositories/${getVersionedFileName(entityLowerCase)}Repository.ts`),
       content: generateRepositoryCode(config)
     });
   }
-  
+
   if (config.generateDtos) {
     files.push({
-      path: path.join(baseDir, `src/dtos/${getVersionedFileName(entityLowerCase)}Dto.ts`),
+      path: path.join(baseDir, version ? `src/v${version}/dtos/${getVersionedFileName(entityLowerCase)}Dto.ts` : `src/dtos/${getVersionedFileName(entityLowerCase)}Dto.ts`),
       content: generateDtoCode(config)
     });
   }
+  
   
   // Write files
   files.forEach(file => {
@@ -510,6 +512,6 @@ export function generateResource(config: ResourceConfig): void {
   
   // Log version information
   if (version) {
-    console.log(`API Version: v${version} - Endpoints will be available at: ${versionedBasePath}`);
+    console.log(`API Version: v${version} - Endpoints will be available at: ${config.basePath}`);
   }
 }

@@ -12,7 +12,7 @@ import {
   HttpCode, 
   NotFoundError 
 } from 'routing-controllers';
-import { Log } from '../decorators/log.decorator';
+import { Log } from '../../decorators/log.decorator';
 import { OpenAPI } from 'routing-controllers-openapi';
 import { CreditCardApplicationService } from '../services/creditcardapplicationService';
 
@@ -21,10 +21,10 @@ import { CreditCardApplication, CreditCardApplicationStatus } from '../models/in
 import { CreateCreditCardApplicationDto, UpdateCreditCardApplicationDto } from '../dtos/creditcardapplicationDto';
 
 /**
- * CreditCardApplication - API Controller 
+ * CreditCardApplication - API Controller (v1)
  * Generated automatically
  */
-@JsonController('/card-applications')
+@JsonController('/v1/card-applications')
 export class CreditCardApplicationController {
   private creditCardApplicationService: CreditCardApplicationService;
   
@@ -33,11 +33,11 @@ export class CreditCardApplicationController {
   }
 
   /**
-   * Retrieve all credit card applications
+   * Retrieve all credit card applications (API v1)
    */
   @OpenAPI({
-    summary: 'Retrieve all credit card applications',
-    description: 'Retrieve all credit card applications',
+    summary: 'Retrieve all credit card applications (v1)',
+    description: 'Retrieve all credit card applications - API Version 1',
     responses: {
       200: { description: 'Success' },
       400: { description: 'Bad Request' },
@@ -51,11 +51,11 @@ export class CreditCardApplicationController {
     return await this.creditCardApplicationService.getAll(params);
   }
   /**
-   * Retrieve a specific credit card application by ID
+   * Retrieve a specific credit card application by ID (API v1)
    */
   @OpenAPI({
-    summary: 'Retrieve a specific credit card application by ID',
-    description: 'Retrieve a specific credit card application by ID',
+    summary: 'Retrieve a specific credit card application by ID (v1)',
+    description: 'Retrieve a specific credit card application by ID - API Version 1',
     responses: {
       200: { description: 'Success' },
       400: { description: 'Bad Request' },
@@ -75,11 +75,11 @@ export class CreditCardApplicationController {
     return result;
   }
   /**
-   * Submit a new credit card application
+   * Submit a new credit card application (API v1)
    */
   @OpenAPI({
-    summary: 'Submit a new credit card application',
-    description: 'Submit a new credit card application',
+    summary: 'Submit a new credit card application (v1)',
+    description: 'Submit a new credit card application - API Version 1',
     responses: {
       201: { description: 'Success' },
       400: { description: 'Bad Request' },
@@ -93,11 +93,11 @@ export class CreditCardApplicationController {
     return await this.creditCardApplicationService.create(data);
   }
   /**
-   * Update an existing credit card application
+   * Update an existing credit card application (API v1)
    */
   @OpenAPI({
-    summary: 'Update an existing credit card application',
-    description: 'Update an existing credit card application',
+    summary: 'Update an existing credit card application (v1)',
+    description: 'Update an existing credit card application - API Version 1',
     responses: {
       200: { description: 'Success' },
       400: { description: 'Bad Request' },
@@ -116,11 +116,11 @@ export class CreditCardApplicationController {
     return result;
   }
   /**
-   * Update the status of a credit card application
+   * Update the status of a credit card application (API v1)
    */
   @OpenAPI({
-    summary: 'Update the status of a credit card application',
-    description: 'Update the status of a credit card application',
+    summary: 'Update the status of a credit card application (v1)',
+    description: 'Update the status of a credit card application - API Version 1',
     responses: {
       200: { description: 'Success' },
       400: { description: 'Bad Request' },
@@ -155,11 +155,11 @@ export class CreditCardApplicationController {
     return result;
   }
   /**
-   * Delete a credit card application
+   * Delete a credit card application (API v1)
    */
   @OpenAPI({
-    summary: 'Delete a credit card application',
-    description: 'Delete a credit card application',
+    summary: 'Delete a credit card application (v1)',
+    description: 'Delete a credit card application - API Version 1',
     responses: {
       200: { description: 'Success' },
       400: { description: 'Bad Request' },

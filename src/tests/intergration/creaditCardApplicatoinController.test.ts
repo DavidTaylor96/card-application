@@ -2,7 +2,8 @@
 import request from 'supertest';
 import express from 'express';
 import { createExpressServer } from 'routing-controllers';
-import { CreditCardApplicationController } from '../../controllers/creditcardapplicationController';
+import { CreditCardApplicationController } from '../../v1/controllers/creditcardapplicationController';
+
 
 describe('CreditCardApplicationController (Integration)', () => {
   let app: express.Express;

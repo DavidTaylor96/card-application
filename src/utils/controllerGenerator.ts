@@ -18,19 +18,7 @@ export interface ControllerConfig {
   endpoints: EndpointConfig[];
   serviceName: string;
   serviceImportPath: string;
-  version?: string; // New field for API version
-}
-
-/**
- * Extracts the name of the service class without the version suffix
- */
-function getBaseServiceName(serviceName: string, version?: string): string {
-  if (!version) return serviceName;
-  const versionSuffix = `V${version}`;
-  if (serviceName.endsWith(versionSuffix)) {
-    return serviceName.substring(0, serviceName.length - versionSuffix.length);
-  }
-  return serviceName;
+  version?: string; // API version field
 }
 
 /**
@@ -47,13 +35,13 @@ export function generateControllerCode(config: ControllerConfig & { properties?:
   const hasStatusType = !!statusProperty;
   
   // Build controller class name with version suffix if applicable
-  const controllerClass = version ? `${name}V${version}Controller` : `${name}Controller`;
+  const controllerClass = `${name}Controller`;
   
   // Adjust interfaces and DTOs import paths based on versioning
   const interfaceImport = `import { ${name}${hasStatusType ? `, ${name}Status` : ''} } from '../models/interfaces/${entityNameCamelCase.toLowerCase()}.interface';`;
   
   // For DTOs, we might have versioned files
-  const dtoFileName = version ? `${entityNameCamelCase.toLowerCase()}.v${version}` : entityNameCamelCase.toLowerCase();
+  const dtoFileName = entityNameCamelCase.toLowerCase();
   const dtoImport = `import { Create${name}Dto, Update${name}Dto } from '../dtos/${dtoFileName}Dto';`;
   
   // Start building the controller class
@@ -71,7 +59,7 @@ import {
   HttpCode, 
   NotFoundError 
 } from 'routing-controllers';
-import { Log } from '../decorators/log.decorator';
+import { Log } from '../../decorators/log.decorator';
 import { OpenAPI } from 'routing-controllers-openapi';
 import { ${serviceName} } from '${serviceImportPath}';
 

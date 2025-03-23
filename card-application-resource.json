@@ -6,6 +6,7 @@
     "entityName": "CreditCardApplication",
     "generateRepository": true,
     "generateDtos": true,
+    "version": "1",
     "properties": [
       {
         "name": "applicantName",

@@ -1,4 +1,4 @@
-// src/services/creditCardApplicationService.ts
+// src/services/creditcardapplicationService.ts
 import { CreditCardApplication, CreditCardApplicationStatus } from '../models/interfaces/creditcardapplication.interface';
 import { CreditCardApplicationRepository } from '../repositories/creditcardapplicationRepository';
 

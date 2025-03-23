@@ -1,6 +1,6 @@
 // src/dtos/creditcardapplicationDto.ts
 import { IsString, IsEmail, IsOptional, IsNumber, IsBoolean, MinLength, IsIn, IsArray } from 'class-validator';
-import { ApiProperty } from '../decorators/api-property.decorator';
+import { ApiProperty } from '../../decorators/api-property.decorator';
 
 export class CreateCreditCardApplicationDto {
   /**
